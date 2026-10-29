@@ -1,40 +1,73 @@
 <!-- BEGIN_TF_DOCS -->
-# Terraform STACKIT module template
+# Terraform STACKIT Service Account module
 
-Repository template used to seed new Terraform module repositories for the [terraform-stackit-modules](https://github.com/terraform-stackit-modules) organization. Usage of this template is allowed per included license.
+Terraform module which manages [STACKIT service accounts](https://registry.terraform.io/providers/stackitcloud/stackit/latest/docs/resources/service_account), their keys and their federated identity providers on [STACKIT](https://www.stackit.de/en/).
 
-[![License](https://img.shields.io/github/license/terraform-stackit-modules/terraform-repo-template)](./LICENSE)
+[![Terraform Registry](https://img.shields.io/github/v/release/terraform-stackit-modules/terraform-stackit-service-account?label=registry&color=7B42BC&logo=terraform&logoColor=white&style=flat)](https://registry.terraform.io/modules/terraform-stackit-modules/service-account/stackit/latest)
+[![OpenTofu Registry](https://img.shields.io/badge/OpenTofu-Registry-FF643B?style=flat&logo=opentofu&logoColor=white)](https://search.opentofu.org/module/terraform-stackit-modules/service-account/stackit/latest)
+[![License](https://img.shields.io/github/license/terraform-stackit-modules/terraform-stackit-service-account)](./LICENSE)
 
 This repository is not from the official STACKIT organization.
 
-## Creating a module from this template
+## Usage
 
-Create a new repository from this template, then follow the checklist in
-[`TEMPLATE_USAGE.md`](./TEMPLATE\_USAGE.md). In short:
+```hcl
+module "service_account" {
+  source  = "terraform-stackit-modules/service-account/stackit"
+  version = ">= 1.0.0"
 
-1. Rename the repository to `terraform-stackit-<service>` and update the GitHub description.
-2. Replace all occurrences of `MODULE_NAME` with the actual module name.
-3. Update `AGENTS.md`, the `examples/basic` example and `.header.md` with the module-specific
-   content.
-4. Configure the `SEMANTIC_RELEASE_TOKEN` secret in the repository settings.
+  project_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  name       = "ci-deployer"
 
-The `TEMPLATE ONLY` section below and `TEMPLATE_USAGE.md` can be removed automatically by the
-`.github/workflows/template-cleanup.yml` workflow on the first push.
+  keys = {
+    ci = {
+      ttl_days = 30
+    }
+  }
 
-<!-- TEMPLATE ONLY - Remove this section when using this template for a new module -->
-## Acknowledgements
+  federations = {
+    github = {
+      name   = "github-actions"
+      issuer = "https://token.actions.githubusercontent.com"
+      assertions = [
+        {
+          item     = "aud"
+          operator = "equals"
+          value    = "stackit"
+        }
+      ]
+    }
+  }
+}
+```
 
-This template is inspired by two reference implementations in the Terraform ecosystem:
+## Composite module
 
-- [terraform-aws-modules](https://github.com/terraform-aws-modules) by [Anton Babenko](https://github.com/antonbabenko) — the community standard for Terraform modules on AWS
-- [terraform-repo-template](https://github.com/aws-ia/terraform-repo-template) by [AWS Integration & Automation](https://github.com/aws-ia) — the AWS official modules organization
-<!-- END TEMPLATE ONLY -->
+- `modules/account` — the `stackit_service_account` (toggled by `create_account`).
+- `modules/key` — `stackit_service_account_key` entries (`for_each` over `keys`).
+- `modules/federation` — `stackit_service_account_federated_identity_provider` entries (`for_each` over `federations`).
+
+The root wires them together and, when `create_account = false`, targets an existing service account via `service_account_email` for key and federation management.
+
+## Notes
+
+- The service account `email` is **auto-generated** by STACKIT (computed); the key and federation
+  sub-modules reference it through the root wiring, never as a `for_each` key.
+- Key JSON credentials are a **credential**: the `keys_json` output is `sensitive` — store it in a
+  secrets manager, do not commit it.
+- `keys` is a map keyed by a **stable identifier**; use `rotate_when_changed` to force key rotation.
+- Federations: at least one assertion with the claim `aud` is required, and the only supported
+  assertion operator is `equals`.
+- The resources are **region-agnostic** — this module has no `region` variable.
+
+## Examples
+
+- [`basic`](./examples/basic) — minimal, self-contained example (requires only `project_id`).
 
 <!-- markdownlint-disable MD001 -->
 ### Contributing
 
-PRs to this template will be considered but are not guaranteed to be included. Consider creating
-an issue to discuss a feature you want to include before taking the time to create a PR.
+This module follows the conventions of the `terraform-stackit-modules` organization. Before opening a PR:
 
 1. [Install pre-commit](https://pre-commit.com/#install) and run `pre-commit install`.
 2. Install the required tools: [tflint](https://github.com/terraform-linters/tflint), [tfsec](https://aquasecurity.github.io/tfsec/), [terraform-docs](https://github.com/terraform-docs/terraform-docs), [golang](https://go.dev/doc/install), [coreutils](https://www.gnu.org/software/coreutils/).
@@ -51,27 +84,38 @@ an issue to discuss a feature you want to include before taking the time to crea
 
 ## Providers
 
-| Name | Version |
-| ---- | ------- |
-| <a name="provider_stackit"></a> [stackit](#provider\_stackit) | >= 0.113.0 |
+No providers.
 
 ## Modules
 
-No modules.
+| Name | Source | Version |
+| ---- | ------ | ------- |
+| <a name="module_account"></a> [account](#module\_account) | ./modules/account | n/a |
+| <a name="module_federation"></a> [federation](#module\_federation) | ./modules/federation | n/a |
+| <a name="module_key"></a> [key](#module\_key) | ./modules/key | n/a |
 
 ## Resources
 
-| Name | Type |
-| ---- | ---- |
-| [stackit_network.this](https://registry.terraform.io/providers/stackitcloud/stackit/latest/docs/resources/network) | resource |
+No resources.
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The STACKIT project ID. | `string` | n/a | yes |
+| <a name="input_project_id"></a> [project\_id](#input\_project\_id) | STACKIT project ID to which the service account, its keys and its federated identity providers are associated. | `string` | n/a | yes |
+| <a name="input_create_account"></a> [create\_account](#input\_create\_account) | Whether to create the service account. Set to false to manage keys and federations of an existing service account provided via `service_account_email`. | `bool` | `true` | no |
+| <a name="input_federations"></a> [federations](#input\_federations) | Map of federated identity providers to attach to the service account, keyed by a stable identifier. Each value:<br/>  - `name`      : name of the federated identity provider.<br/>  - `issuer`    : issuer URL.<br/>  - `assertions`: optional list of `{ item, operator, value }`; at least one assertion with the claim `aud` is required, the only supported operator is `equals`. | <pre>map(object({<br/>    name   = string<br/>    issuer = string<br/>    assertions = optional(list(object({<br/>      item     = string<br/>      operator = string<br/>      value    = string<br/>    })))<br/>  }))</pre> | `{}` | no |
+| <a name="input_keys"></a> [keys](#input\_keys) | Map of service account keys to create, keyed by a stable identifier. Each value:<br/>  - `public_key`         : optional RSA2048 public key; if not provided, STACKIT generates the key pair.<br/>  - `rotate_when_changed`: optional map whose change forces key recreation (rotation).<br/>  - `ttl_days`           : optional key validity in days; if unset, the key is valid until deleted.<br/>The generated key JSON credentials are exposed via the `keys_json` output (sensitive). | <pre>map(object({<br/>    public_key          = optional(string)<br/>    rotate_when_changed = optional(map(string))<br/>    ttl_days            = optional(number)<br/>  }))</pre> | `{}` | no |
+| <a name="input_name"></a> [name](#input\_name) | Name of the service account. | `string` | `null` | no |
+| <a name="input_service_account_email"></a> [service\_account\_email](#input\_service\_account\_email) | Email of an existing service account. Used when `create_account` is false. | `string` | `null` | no |
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+| ---- | ----------- |
+| <a name="output_federation_ids"></a> [federation\_ids](#output\_federation\_ids) | Map of federation identifier to federation ID. |
+| <a name="output_key_ids"></a> [key\_ids](#output\_key\_ids) | Map of key identifier to key ID. |
+| <a name="output_keys_json"></a> [keys\_json](#output\_keys\_json) | Map of key identifier to the service account key JSON credentials. Sensitive — store in a secrets manager. |
+| <a name="output_service_account_email"></a> [service\_account\_email](#output\_service\_account\_email) | The email of the service account (created, or the provided `service_account_email` when `create_account` is false). |
+| <a name="output_service_account_id"></a> [service\_account\_id](#output\_service\_account\_id) | The internal ID of the service account (created, or null when `create_account` is false). |
 <!-- END_TF_DOCS -->
