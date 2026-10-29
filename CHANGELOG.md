@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.0 (2026-10-29)
+
+### Features
+
+* Initial STACKIT service account module (account, keys, federated identity providers) ([97c6e00](https://github.com/terraform-stackit-modules/terraform-stackit-service-account/commit/97c6e00a04e36a8aac0b4e3fb9b1140b1d10256d))
+
 ## [1.0.1](https://github.com/terraform-stackit-modules/terraform-repo-template/compare/v1.0.0...v1.0.1) (2026-09-09)
 
 ### Bug Fixes
